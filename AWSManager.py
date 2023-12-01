@@ -1,39 +1,58 @@
 import boto3
+import getpass
+from botocore.exceptions import ClientError
 
 class AWSResourceManager:
-    def __init__(self, region='ap-southeast-2a'):
-        self.ec2 = boto3.resource('ec2', region_name=region, aws_access_key_id='SECRET', aws_secret_access_key='SECRET')
-        self.ec2_client = boto3.client('ec2', region_name=region)
-        self.condor_pool = "ip-172-31-3-10.ap-southeast-2.compute.internal"
+    def __init__(self, access, secret, region='ap-southeast-2'):
+        self.ec2 = boto3.resource('ec2', region_name=region, aws_access_key_id=access, aws_secret_access_key=secret)
+        self.ec2_client = boto3.client('ec2', region_name=region, aws_access_key_id=access, aws_secret_access_key=secret)
+        self.condor_pool = 'ip-172-31-3-10.ap-southeast-2.compute.internal'
 
     def list_instances(self):
         instances = self.ec2.instances.all()
         for instance in instances:
-            print(f"Instance ID: {instance.id}, Status: {instance.state['Name']}")
+            # 인스턴스 이름 파싱
+            for tag in instance.tags:
+                if tag['Key'] == 'Name':
+                    instance_name = tag['Value']
+                    break
+                else:
+                    instance_name = 'N/A'
+
+            print(f"Instance ID: {instance.id} | Name : {instance_name} | Status: {instance.state['Name']}")
 
     def list_available_zones(self):
         response = self.ec2_client.describe_availability_zones()
         for zone in response['AvailabilityZones']:
-            print(f"Zone: {zone['ZoneName']}, State: {zone['State']}")
+            print(f"Zone: {zone['ZoneName']} | State: {zone['State']}")
 
-    def start_instance(self, instance_id):
-        self.ec2.instances.filter(InstanceIds=[instance_id]).start()
-        # Update Condor Pool dynamically
-        self.update_condor_pool()
+    def list_available_regions(self):
+        regions = self.ec2_client.describe_regions()
+        for region in regions['Regions']:
+            print(f"Region: {region['RegionName']}")
 
-    def stop_instance(self, instance_id):
-        self.ec2.instances.filter(InstanceIds=[instance_id]).stop()
-        # Update Condor Pool dynamically
-        self.update_condor_pool()
+    def manage_instance(self, instance_id, type):
+        try:
+            if type == 1:
+                # 인스턴스 시작 요청
+                self.ec2.instances.filter(InstanceIds=[instance_id]).start()
+                print(f"Starting {instance_id}...")
+            elif type == 2:
+                self.ec2.instances.filter(InstanceIds=[instance_id]).stop()
+                print(f"Stopping {instance_id}...")
+            elif type == 3:
+                self.ec2.instances.filter(InstanceIds=[instance_id]).reboot()
+                print(f"Rebooting {instance_id}...")
+
+        except ClientError as e:
+            # 예외 처리
+            error_message = str(e.response.get('Error', {}).get('Message', 'Unknown error'))
+            print(f"Failed. | {error_message}")
 
     def create_instance(self):
-        # Add logic to create a new instance
-        # Update Condor Pool dynamically
-        self.update_condor_pool()
+        print("Create")
 
-    def reboot_instance(self, instance_id):
-        self.ec2.instances.filter(InstanceIds=[instance_id]).reboot()
-
+        
     def list_images(self):
         images = self.ec2.images.all()
         for image in images:
@@ -42,11 +61,6 @@ class AWSResourceManager:
     def update_condor_pool(self):
         # Add logic to dynamically update Condor Pool
         print("Updating Condor Pool...")
-
-    def list_available_regions(self):
-        regions = self.ec2_client.describe_regions()
-        for region in regions['Regions']:
-            print(f"Region: {region['RegionName']}")
 
 def main():
     print("      __          _______   __  __                                   \n")
@@ -58,7 +72,10 @@ def main():
     print("                                                      __/ |          \n")
     print("   2020039091 Rocky Eo                               |___/   ")
     
-    aws_manager = AWSResourceManager()
+    access = input("Access Key : ")
+    secret = getpass.getpass("Secret Key : ")
+
+    aws_manager = AWSResourceManager(access, secret)
 
     while True:
         print("\n------------------------------------------------------------")
@@ -69,27 +86,35 @@ def main():
         print("99. quit")
         print("------------------------------------------------------------")
 
-        choice = input("메뉴 선택: ")
+        choice = input("Select Menu : ")
 
         if choice == '1':
             aws_manager.list_instances()
+
         elif choice == '2':
             aws_manager.list_available_zones()
+
         elif choice == '3':
-            instance_id = input("인스턴스 ID : ")
-            aws_manager.start_instance(instance_id)
+            instance_id = input("Instance ID : ")
+            aws_manager.manage_instance(instance_id, 1)
+
         elif choice == '4':
             aws_manager.list_available_regions()
+
         elif choice == '5':
-            instance_id = input("인스턴스 ID : ")
-            aws_manager.stop_instance(instance_id)
+            instance_id = input("Instance ID : ")
+            aws_manager.manage_instance(instance_id, 2)
+
         elif choice == '6':
             aws_manager.create_instance()
+
         elif choice == '7':
-            instance_id = input("인스턴스 ID : ")
-            aws_manager.reboot_instance(instance_id)
+            instance_id = input("Instance ID : ")
+            aws_manager.manage_instance(instance_id, 3)
+
         elif choice == '8':
             aws_manager.list_images()
+
         elif choice == '99':
             break
         else:
