@@ -43,14 +43,29 @@ class AWSResourceManager:
             elif type == 3:
                 self.ec2.instances.filter(InstanceIds=[instance_id]).reboot()
                 print(f"Rebooting {instance_id}...")
+            #Condor
+            self.update_condor_pool()
 
         except ClientError as e:
             # 예외 처리
             error_message = str(e.response.get('Error', {}).get('Message', 'Unknown error'))
             print(f"Failed. | {error_message}")
 
-    def create_instance(self):
-        print("Create")
+    def create_instance(self, imageID, InstType, KeyName, MinC, MaxC, SecGroupID, SubnetID):
+        instance_params = {
+            'ImageId': imageID,
+            'InstanceType': InstType,
+            'KeyName': KeyName,
+            'MinCount': MinC,
+            'MaxCount': MaxC,
+            'SecurityGroupIds': [SecGroupID],
+            'SubnetId': SubnetID
+        }
+        response = self.ec2_client.run_instances(**instance_params)
+
+        instance_id = response['Instances'][0]['InstanceId']
+        print(f"Successfully Created. Instance ID: {instance_id}")
+
 
         
     def list_images(self):
