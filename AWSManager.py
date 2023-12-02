@@ -1,4 +1,5 @@
 import boto3
+import paramiko
 import getpass
 from botocore.exceptions import ClientError
 
@@ -6,7 +7,7 @@ class AWSResourceManager:
     def __init__(self, access, secret, region='ap-southeast-2'):
         self.ec2 = boto3.resource('ec2', region_name=region, aws_access_key_id=access, aws_secret_access_key=secret)
         self.ec2_client = boto3.client('ec2', region_name=region, aws_access_key_id=access, aws_secret_access_key=secret)
-        self.condor_pool = 'ip-172-31-3-10.ap-southeast-2.compute.internal'
+        self.condor_pool = 'ec2-54-79-63-34.ap-southeast-2.compute.amazonaws.com'
 
     def list_instances(self):
         instances = self.ec2.instances.all()
@@ -43,28 +44,34 @@ class AWSResourceManager:
             elif type == 3:
                 self.ec2.instances.filter(InstanceIds=[instance_id]).reboot()
                 print(f"Rebooting {instance_id}...")
-            #Condor
-            self.update_condor_pool()
 
         except ClientError as e:
             # 예외 처리
             error_message = str(e.response.get('Error', {}).get('Message', 'Unknown error'))
             print(f"Failed. | {error_message}")
 
-    def create_instance(self, imageID, InstType, KeyName, MinC, MaxC, SecGroupID, SubnetID):
-        instance_params = {
-            'ImageId': imageID,
-            'InstanceType': InstType,
-            'KeyName': KeyName,
-            'MinCount': MinC,
-            'MaxCount': MaxC,
-            'SecurityGroupIds': [SecGroupID],
-            'SubnetId': SubnetID
-        }
-        response = self.ec2_client.run_instances(**instance_params)
+    def create_instance(self, name):
+        # 인스턴스 생성 요청
+        self.ec2.create_instances(
+            ImageId='ami-0f5f922f781854672', #Amazon Linux 2 Kernel 5.10 AMI 2.0.20231116.0 x86_64 HVM gp2
+            MinCount=1,
+            MaxCount=1,
+            InstanceType='t2.micro',
+            KeyName='rockyeo',
+            TagSpecifications=[
+                {
+                    'ResourceType': 'instance',
+                    'Tags': [
+                        {
+                            'Key': 'Name',
+                            'Value': name
+                        },
+                    ]
+                },
+            ]
+        )
 
-        instance_id = response['Instances'][0]['InstanceId']
-        print(f"Successfully Created. Instance ID: {instance_id}")
+        print(f"{name} Instance Created.")
 
 
         
@@ -73,9 +80,15 @@ class AWSResourceManager:
         for image in images:
             print(f"Image ID: {image.id}, Name: {image.name}")
 
-    def update_condor_pool(self):
-        # Add logic to dynamically update Condor Pool
-        print("Updating Condor Pool...")
+    def condor_status(self):
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh.connect(self.condor_pool, username='ec2-user', key_filename='C:/.ssh/rockyeo.pem')
+        stdin, stdout, stderr = ssh.exec_command('condor_status')
+        lines = stdout.readlines()
+        ssh.close()
+        return lines
+    
 
 def main():
     print("      __          _______   __  __                                   \n")
@@ -98,6 +111,7 @@ def main():
         print("3. start instance\t4. available regions")
         print("5. stop instance\t6. create instance")
         print("7. reboot instance\t8. list images")
+        print("9. condor status")
         print("99. quit")
         print("------------------------------------------------------------")
 
@@ -121,7 +135,8 @@ def main():
             aws_manager.manage_instance(instance_id, 2)
 
         elif choice == '6':
-            aws_manager.create_instance()
+            instance_name = input("Instance Name : ")
+            aws_manager.create_instance(instance_name)
 
         elif choice == '7':
             instance_id = input("Instance ID : ")
@@ -129,6 +144,10 @@ def main():
 
         elif choice == '8':
             aws_manager.list_images()
+        
+        elif choice == '9':
+            condor_status = aws_manager.condor_status()
+            print(*condor_status)
 
         elif choice == '99':
             break
