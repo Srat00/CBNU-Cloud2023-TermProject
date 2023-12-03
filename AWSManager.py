@@ -127,8 +127,16 @@ class AWSResourceManager:
         except ClientError as e:
             error_message = str(e.response.get('Error', {}).get('Message', 'Unknown error'))
             print(f"Failed. | {error_message}")
-            
     
+    # S3 객체 삭제       
+    def remove_s3_object(self, bucket_name, key):
+        try:
+            # S3 버킷에서 객체 삭제
+            self.s3.delete_object(Bucket=bucket_name, Key=key)
+            print(f"{key} Deleted.")
+        except ClientError as e:
+            error_message = str(e.response.get('Error', {}).get('Message', 'Unknown error'))
+            print(f"Failed. | {error_message}")
 
 def main():
     print("    ___      _____ __  __                             ")
@@ -151,6 +159,7 @@ def main():
         print("7. reboot instance\t8. list images")
         print("9. condor status\t10. list from s3 storage")
         print("11. upload to s3\t12. download from s3")
+        print("13. remove from s3")
         print("99. quit")
         print("------------------------------------------------------------")
 
@@ -216,9 +225,17 @@ def main():
             local_file = input("Download File Location ( Example: C:\Test.txt ): ")
             aws_manager.download_from_s3(bucket_name, s3_file_name, local_file)
 
+        # Remove from S3
+        elif choice == '13':
+            bucket_name = input("Bucket Name : ")
+            key = input("S3 File Name : ")
+            aws_manager.remove_s3_object(bucket_name, key)
+        
+        # Quit
         elif choice == '99':
             break
-
+        
+        # Invalid Input
         else:
             print("Invalid Input, Please Try Again.")
 
